@@ -26,7 +26,7 @@
       background: var(--bg);
       padding: 16px 16px 32px;
     }
-    main { max-width: 420px; margin: 0 auto; }
+    main { max-width: 440px; margin: 0 auto; }
     h1 { font-size: 1.25rem; margin: 8px 0 4px; }
     .sub { color: var(--muted); font-size: .9rem; margin-bottom: 16px; }
     .card {
@@ -35,6 +35,10 @@
       border-radius: 16px;
       padding: 16px;
       margin-bottom: 12px;
+    }
+    .card h2 {
+      font-size: 1rem;
+      margin: 0 0 2px;
     }
     .status {
       display: flex; align-items: center; gap: 10px;
@@ -48,23 +52,20 @@
     .dot.on { background: var(--ok); }
     .dot.warn { background: var(--warn); }
     .dot.err { background: var(--err); }
-    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+    .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px; }
     button {
       appearance: none; border: 0; border-radius: 12px;
-      padding: 14px 12px; font: inherit; font-weight: 650;
+      padding: 12px 10px; font: inherit; font-weight: 650;
       cursor: pointer;
     }
     button:disabled { opacity: .45; cursor: not-allowed; }
-    .btn-connect { width: 100%; background: var(--blue); color: #fff; margin-top: 12px; }
+    .btn-connect { width: 100%; background: var(--blue); color: #fff; margin-top: 10px; }
     .btn-on { background: #d1fae5; color: #065f46; }
     .btn-off { background: #fee2e2; color: #991b1b; }
     .btn-sec { background: #f3f4f6; color: #111827; }
-    textarea, input[type=text] {
-      width: 100%; border: 1px solid var(--line); border-radius: 10px;
-      padding: 10px 12px; font: inherit; margin-top: 8px;
-    }
     #log {
-      height: 160px; overflow: auto; white-space: pre-wrap;
+      height: 180px; overflow: auto; white-space: pre-wrap;
       font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       background: #0b1220; color: #d1d5db; border-radius: 10px;
       padding: 10px; margin-top: 8px;
@@ -74,55 +75,57 @@
       display: none; background: #fef2f2; color: #991b1b;
       border: 1px solid #fecaca; border-radius: 12px; padding: 12px; margin-bottom: 12px;
     }
+    .meta { font-size: .8rem; color: var(--muted); margin-top: 6px; }
+    .listen {
+      display: none;
+      margin-top: 10px;
+      padding: 10px 12px;
+      background: #ecfdf5;
+      border: 1px solid #a7f3d0;
+      border-radius: 12px;
+      font-size: .85rem;
+    }
+    .listen a { color: #065f46; font-weight: 650; }
+    input[type=text] {
+      width: 100%; border: 1px solid var(--line); border-radius: 10px;
+      padding: 10px 12px; font: inherit; margin-top: 8px;
+    }
   </style>
 </head>
 <body>
   <main>
     <h1>ESP32-S3 пульт</h1>
-    <p class="sub">BLE-команды включения и статуса. Chrome / Edge / Android. На iPhone — браузер Bluefy, не Safari.</p>
+    <p class="sub">Несколько плат. BLE будит точку доступа, звук — после подключения телефона к её Wi‑Fi. Chrome / Edge / Android. На iPhone — Bluefy.</p>
 
     <div class="errbox" id="nosupport">Этот браузер не умеет Web Bluetooth. Откройте страницу в Chrome или Edge на Android/ПК. Safari на iPhone не подходит — нужен Bluefy.</div>
 
-    <section class="card">
-      <div class="status">
-        <span class="dot" id="dot"></span>
-        <span id="link">нет связи</span>
-      </div>
-      <div class="sub" id="device" style="margin:6px 0 0">устройство не выбрано</div>
-      <button class="btn-connect" id="btnConnect">Подключить</button>
-    </section>
+    <div id="devices"></div>
 
     <section class="card">
-      <div class="status" style="margin-bottom:12px">
-        <span class="dot" id="loadDot"></span>
-        <span id="loadLabel">нагрузка: неизвестно</span>
-      </div>
-      <div class="row">
-        <button class="btn-on" id="btnOn" disabled>Включить</button>
-        <button class="btn-off" id="btnOff" disabled>Выключить</button>
-        <button class="btn-sec" id="btnStatus" disabled>Статус</button>
-        <button class="btn-sec" id="btnPing" disabled>Ping</button>
-      </div>
-      <input id="custom" type="text" placeholder="своя команда, Enter — отправить" disabled />
-    </section>
-
-    <section class="card">
-      <div style="font-weight:600">Лог</div>
+      <div style="font-weight:600">Общий лог</div>
       <div id="log"></div>
+      <input id="custom" type="text" placeholder="id команды: 1 on · 2 status · ping всем — all ping" />
     </section>
 
-    <p class="hint">Страницу нужно открывать с http://localhost или https://. Файл с диска (file://) Chrome блокирует. На компьютере: <code>python -m http.server 8080</code> в папке со страницей.</p>
+    <p class="hint">Страницу открывайте с http://localhost или https://. С диска (file://) Chrome блокирует Web Bluetooth. На компьютере: <code>python -m http.server 8080</code> в папке со страницей. Одновременно телефон может слушать только одну SoftAP — зато BLE-команды идут на все подключённые платы.</p>
   </main>
 
 <script>
 const SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
-const CHAR_RX = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // browser → ESP
-const CHAR_TX = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // ESP → browser
+const CHAR_RX = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
+const CHAR_TX = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+
+// Должно совпадать с DEV_TABLE в прошивке (без паролей).
+const DEVICES = [
+  { id: 1, label: "Устройство 1", bleName: "ESP32-S3-CMD-1", ssid: "Xiaomi 16T" },
+  { id: 2, label: "Устройство 2", bleName: "ESP32-S3-CMD-2", ssid: "HUAWEI-B311" },
+  { id: 3, label: "Устройство 3", bleName: "ESP32-S3-CMD-3", ssid: "TP-Link_Guest" },
+  { id: 4, label: "Устройство 4", bleName: "ESP32-S3-CMD-4", ssid: "DIRECT-7C-HP" },
+];
 
 const $ = (id) => document.getElementById(id);
 const logEl = $("log");
-
-let device = null, server = null, rx = null, tx = null;
+const slots = new Map();
 
 function log(msg) {
   const t = new Date().toLocaleTimeString();
@@ -130,104 +133,179 @@ function log(msg) {
   logEl.scrollTop = logEl.scrollHeight;
 }
 
-function setLink(state, text) {
-  $("dot").className = "dot" + (state ? " " + state : "");
-  $("link").textContent = text;
+function setDot(el, state) {
+  el.className = "dot" + (state ? " " + state : "");
 }
 
-function setLoad(on) {
-  if (on === null) {
-    $("loadDot").className = "dot";
-    $("loadLabel").textContent = "нагрузка: неизвестно";
-    return;
-  }
-  $("loadDot").className = "dot " + (on ? "on" : "");
-  $("loadLabel").textContent = on ? "нагрузка: ВКЛ" : "нагрузка: ВЫКЛ";
-}
-
-function setBusy(connected) {
-  ["btnOn", "btnOff", "btnStatus", "btnPing", "custom"].forEach((id) => {
-    $(id).disabled = !connected;
-  });
-  $("btnConnect").textContent = connected ? "Отключить" : "Подключить";
-}
-
-function parseState(text) {
+function parseAp(text) {
   const u = text.trim().toUpperCase();
-  if (u.includes("STATE ON") || u === "OK ON") setLoad(true);
-  if (u.includes("STATE OFF") || u === "OK OFF") setLoad(false);
+  if (u.includes("STATE ON") || u === "OK ON") return true;
+  if (u.includes("STATE OFF") || u === "OK OFF") return false;
+  return null;
 }
 
-async function connect() {
-  device = await navigator.bluetooth.requestDevice({
-    filters: [{ namePrefix: "ESP32-S3" }],
-    optionalServices: [SERVICE],
-  });
-  $("device").textContent = device.name || device.id;
-  device.addEventListener("gattserverdisconnected", () => {
-    log("отключено");
-    setLink("err", "нет связи");
-    setBusy(false);
-    rx = tx = server = null;
-  });
+function renderSlot(dev) {
+  const card = document.createElement("section");
+  card.className = "card";
+  card.innerHTML = `
+    <h2>${dev.label}</h2>
+    <div class="meta">${dev.bleName} · маска Wi‑Fi: ${dev.ssid}</div>
+    <div class="status" style="margin-top:10px">
+      <span class="dot" data-el="bleDot"></span>
+      <span data-el="bleLabel">нет связи</span>
+    </div>
+    <div class="status" style="margin-top:6px">
+      <span class="dot" data-el="apDot"></span>
+      <span data-el="apLabel">точка: неизвестно</span>
+    </div>
+    <button class="btn-connect" data-act="connect">Подключить</button>
+    <div class="row">
+      <button class="btn-on" data-act="on" disabled>Точка вкл</button>
+      <button class="btn-off" data-act="off" disabled>Точка выкл</button>
+    </div>
+    <div class="row3">
+      <button class="btn-sec" data-act="status" disabled>Статус</button>
+      <button class="btn-sec" data-act="ping" disabled>Ping</button>
+      <button class="btn-sec" data-act="listen" disabled>Слушать</button>
+    </div>
+    <div class="listen" data-el="listenBox">
+      Подключите телефон к <b>${dev.ssid}</b>, затем откройте
+      <a href="http://192.168.4.1" target="_blank" rel="noopener">http://192.168.4.1</a>
+    </div>
+  `;
+  $("devices").appendChild(card);
 
-  setLink("warn", "подключение…");
-  server = await device.gatt.connect();
-  const svc = await server.getPrimaryService(SERVICE);
-  rx = await svc.getCharacteristic(CHAR_RX);
-  tx = await svc.getCharacteristic(CHAR_TX);
+  const el = {};
+  card.querySelectorAll("[data-el]").forEach((n) => { el[n.dataset.el] = n; });
+  const btns = {};
+  card.querySelectorAll("[data-act]").forEach((n) => { btns[n.dataset.act] = n; });
 
-  await tx.startNotifications();
-  tx.addEventListener("characteristicvaluechanged", (ev) => {
-    const text = new TextDecoder().decode(ev.target.value);
-    log("← " + text);
-    parseState(text);
-  });
+  const slot = {
+    ...dev,
+    card, el, btns,
+    device: null, server: null, rx: null, tx: null,
+    connected: false, apOn: null,
+  };
+  slots.set(dev.id, slot);
 
-  setLink("on", "на связи");
-  setBusy(true);
-  log("подключено к " + (device.name || "ESP"));
-  await send("status");
+  btns.connect.onclick = () => slot.connected ? disconnectSlot(slot) : connectSlot(slot);
+  btns.on.onclick = () => sendSlot(slot, "on");
+  btns.off.onclick = () => sendSlot(slot, "off");
+  btns.status.onclick = () => sendSlot(slot, "status");
+  btns.ping.onclick = () => sendSlot(slot, "ping");
+  btns.listen.onclick = () => {
+    window.open("http://192.168.4.1", "_blank");
+  };
+
+  paintSlot(slot);
 }
 
-async function disconnect() {
-  try { if (device?.gatt?.connected) device.gatt.disconnect(); } catch (_) {}
-  device = server = rx = tx = null;
-  setLink("", "нет связи");
-  setBusy(false);
-  setLoad(null);
+function paintSlot(slot) {
+  setDot(slot.el.bleDot, slot.connected ? "on" : "");
+  slot.el.bleLabel.textContent = slot.connected ? "на связи" : "нет связи";
+  if (slot.apOn === true) {
+    setDot(slot.el.apDot, "on");
+    slot.el.apLabel.textContent = "точка: ВКЛ · " + slot.ssid;
+    slot.el.listenBox.style.display = "block";
+  } else if (slot.apOn === false) {
+    setDot(slot.el.apDot, "");
+    slot.el.apLabel.textContent = "точка: ВЫКЛ";
+    slot.el.listenBox.style.display = "none";
+  } else {
+    setDot(slot.el.apDot, slot.connected ? "warn" : "");
+    slot.el.apLabel.textContent = "точка: неизвестно";
+    slot.el.listenBox.style.display = "none";
+  }
+  slot.btns.connect.textContent = slot.connected ? "Отключить" : "Подключить";
+  ["on", "off", "status", "ping", "listen"].forEach((k) => {
+    slot.btns[k].disabled = !slot.connected;
+  });
 }
 
-async function send(text) {
-  if (!rx) return;
+async function connectSlot(slot) {
+  try {
+    const device = await navigator.bluetooth.requestDevice({
+      filters: [{ name: slot.bleName }],
+      optionalServices: [SERVICE],
+    });
+    slot.device = device;
+    device.addEventListener("gattserverdisconnected", () => {
+      log(slot.label + ": отключено");
+      slot.connected = false;
+      slot.server = slot.rx = slot.tx = null;
+      slot.apOn = null;
+      paintSlot(slot);
+    });
+
+    setDot(slot.el.bleDot, "warn");
+    slot.el.bleLabel.textContent = "подключение…";
+    slot.server = await device.gatt.connect();
+    const svc = await slot.server.getPrimaryService(SERVICE);
+    slot.rx = await svc.getCharacteristic(CHAR_RX);
+    slot.tx = await svc.getCharacteristic(CHAR_TX);
+    await slot.tx.startNotifications();
+    slot.tx.addEventListener("characteristicvaluechanged", (ev) => {
+      const text = new TextDecoder().decode(ev.target.value);
+      log(slot.label + " ← " + text);
+      const ap = parseAp(text);
+      if (ap !== null) slot.apOn = ap;
+      paintSlot(slot);
+    });
+
+    slot.connected = true;
+    paintSlot(slot);
+    log(slot.label + ": подключено к " + (device.name || slot.bleName));
+    await sendSlot(slot, "status");
+  } catch (e) {
+    if (e.name !== "NotFoundError") log(slot.label + ": ошибка " + e.message);
+    slot.connected = false;
+    paintSlot(slot);
+  }
+}
+
+async function disconnectSlot(slot) {
+  try { if (slot.device?.gatt?.connected) slot.device.gatt.disconnect(); } catch (_) {}
+  slot.device = slot.server = slot.rx = slot.tx = null;
+  slot.connected = false;
+  slot.apOn = null;
+  paintSlot(slot);
+}
+
+async function sendSlot(slot, text) {
+  if (!slot.rx) return;
   const data = new TextEncoder().encode(text);
   try {
-    if (rx.properties.writeWithoutResponse) await rx.writeValueWithoutResponse(data);
-    else await rx.writeValue(data);
-    log("→ " + text);
+    if (slot.rx.properties.writeWithoutResponse) await slot.rx.writeValueWithoutResponse(data);
+    else await slot.rx.writeValue(data);
+    log(slot.label + " → " + text);
   } catch (e) {
-    log("ошибка записи: " + e.message);
+    log(slot.label + ": ошибка записи: " + e.message);
   }
 }
 
-$("btnConnect").onclick = async () => {
-  try {
-    if (device?.gatt?.connected) await disconnect();
-    else await connect();
-  } catch (e) {
-    if (e.name !== "NotFoundError") log("ошибка: " + e.message);
-    setLink("err", "нет связи");
-  }
-};
-$("btnOn").onclick = () => send("on");
-$("btnOff").onclick = () => send("off");
-$("btnStatus").onclick = () => send("status");
-$("btnPing").onclick = () => send("ping");
+DEVICES.forEach(renderSlot);
+
 $("custom").addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && $("custom").value.trim()) {
-    send($("custom").value.trim());
-    $("custom").value = "";
+  if (e.key !== "Enter") return;
+  const raw = $("custom").value.trim();
+  if (!raw) return;
+  $("custom").value = "";
+  const m = raw.match(/^all\s+(.+)$/i);
+  if (m) {
+    for (const slot of slots.values()) {
+      if (slot.connected) sendSlot(slot, m[1].trim());
+    }
+    return;
   }
+  const m2 = raw.match(/^(\d+)\s+(.+)$/);
+  if (m2) {
+    const slot = slots.get(+m2[1]);
+    if (!slot) { log("нет устройства id " + m2[1]); return; }
+    if (!slot.connected) { log(slot.label + " не подключено"); return; }
+    sendSlot(slot, m2[2].trim());
+    return;
+  }
+  log("формат: «1 on», «2 status» или «all off»");
 });
 
 if (!navigator.bluetooth) $("nosupport").style.display = "block";
